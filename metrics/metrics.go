@@ -21,9 +21,11 @@ import (
 // for less cluttered pprof profiles.
 var Enabled bool = false
 
-// MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
-const MetricsEnabledFlag = "metrics"
-const DashboardEnabledFlag = "dashboard"
+// enablerFlags is the CLI flag names to use to enable metrics collections.
+var enablerFlags = []string{"metrics"}
+
+// expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
+var expensiveEnablerFlags = []string{"metrics.expensive"}
 
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
