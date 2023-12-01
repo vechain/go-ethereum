@@ -1,3 +1,10 @@
+## Go Ethereum dependency for vechain/thor
+
+This is a fork of the go-ethereum project based on the v1.8.14 release. It is used as a dependency for the vechain/thor project. Changelogs can be found in this [compare](https://github.com/vechain/go-ethereum/compare/v1.8.14...vechain:go-ethereum:thor-upstream?expand=1) view.
+
+<details>
+  <summary>Click to check the original README</summary>
+
 ## Go Ethereum
 
 Official golang implementation of the Ethereum protocol.
@@ -309,3 +316,4 @@ included in our repository in the `COPYING.LESSER` file.
 The go-ethereum binaries (i.e. all code inside of the `cmd` directory) is licensed under the
 [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also included
 in our repository in the `COPYING` file.
+</details>
