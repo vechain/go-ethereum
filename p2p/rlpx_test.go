@@ -217,7 +217,10 @@ func TestProtocolHandshake(t *testing.T) {
 			return
 		}
 
-		if err := ExpectMsg(rlpx, discMsg, []DiscReason{DiscQuitting}); err != nil {
+		var arr []interface{}
+		arr = append(arr, DiscQuitting)
+
+		if err := ExpectMsg(rlpx, discMsg, arr); err != nil {
 			t.Errorf("error receiving disconnect: %v", err)
 		}
 	}()
