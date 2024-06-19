@@ -17,13 +17,13 @@
 package adapters
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTCPPipe(t *testing.T) {
@@ -42,9 +42,7 @@ func TestTCPPipe(t *testing.T) {
 			_ = binary.PutUvarint(msg, uint64(i))
 
 			_, err := c1.Write(msg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
 		}
 
 		for i := 0; i < msgs; i++ {
@@ -53,13 +51,9 @@ func TestTCPPipe(t *testing.T) {
 
 			out := make([]byte, size)
 			_, err := c2.Read(out)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
 
-			if !bytes.Equal(msg, out) {
-				t.Fatalf("expected %#v, got %#v", msg, out)
-			}
+			assert.Equal(t, msg, out, fmt.Sprintf("expected %#v, got %#v", msg, out))
 		}
 		done <- struct{}{}
 	}()
@@ -86,9 +80,7 @@ func TestTCPPipeBidirections(t *testing.T) {
 			msg := []byte(fmt.Sprintf("ping %02d", i))
 
 			_, err := c1.Write(msg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
 		}
 
 		for i := 0; i < msgs; i++ {
@@ -96,19 +88,12 @@ func TestTCPPipeBidirections(t *testing.T) {
 
 			out := make([]byte, size)
 			_, err := c2.Read(out)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
 
-			if !bytes.Equal(expected, out) {
-				t.Fatalf("expected %#v, got %#v", out, expected)
-			} else {
-				msg := []byte(fmt.Sprintf("pong %02d", i))
-				_, err := c2.Write(msg)
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
+			assert.Equal(t, expected, out, fmt.Sprintf("expected %#v, got %#v", out, expected))
+			msg := []byte(fmt.Sprintf("pong %02d", i))
+			_, err = c2.Write(msg)
+			assert.NoError(t, err)
 		}
 
 		for i := 0; i < msgs; i++ {
@@ -116,13 +101,9 @@ func TestTCPPipeBidirections(t *testing.T) {
 
 			out := make([]byte, size)
 			_, err := c1.Read(out)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
 
-			if !bytes.Equal(expected, out) {
-				t.Fatalf("expected %#v, got %#v", out, expected)
-			}
+			assert.Equal(t, expected, out, fmt.Sprintf("expected %#v, got %#v", out, expected))
 		}
 		done <- struct{}{}
 	}()
@@ -152,9 +133,7 @@ func TestNetPipe(t *testing.T) {
 				_ = binary.PutUvarint(msg, uint64(i))
 
 				_, err := c1.Write(msg)
-				if err != nil {
-					t.Fatal(err)
-				}
+				assert.NoError(t, err)
 			}
 		}()
 
@@ -164,13 +143,9 @@ func TestNetPipe(t *testing.T) {
 
 			out := make([]byte, size)
 			_, err := c2.Read(out)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
 
-			if !bytes.Equal(msg, out) {
-				t.Fatalf("expected %#v, got %#v", msg, out)
-			}
+			assert.Equal(t, msg, out, fmt.Sprintf("expected %#v, got %#v", msg, out))
 		}
 
 		done <- struct{}{}
@@ -203,9 +178,7 @@ func TestNetPipeBidirections(t *testing.T) {
 				msg := []byte(fmt.Sprintf(pingTemplate, i))
 
 				_, err := c1.Write(msg)
-				if err != nil {
-					t.Fatal(err)
-				}
+				assert.NoError(t, err)
 			}
 		}()
 
@@ -216,13 +189,9 @@ func TestNetPipeBidirections(t *testing.T) {
 
 				out := make([]byte, size)
 				_, err := c1.Read(out)
-				if err != nil {
-					t.Fatal(err)
-				}
+				assert.NoError(t, err)
 
-				if !bytes.Equal(expected, out) {
-					t.Fatalf("expected %#v, got %#v", expected, out)
-				}
+				assert.Equal(t, expected, out, fmt.Sprintf("expected %#v, got %#v", expected, out))
 			}
 
 			done <- struct{}{}
@@ -234,20 +203,12 @@ func TestNetPipeBidirections(t *testing.T) {
 
 			out := make([]byte, size)
 			_, err := c2.Read(out)
-			if err != nil {
-				t.Fatal(err)
-			}
+			assert.NoError(t, err)
+			assert.Equal(t, expected, out, fmt.Sprintf("expected %#v, got %#v", expected, out))
 
-			if !bytes.Equal(expected, out) {
-				t.Fatalf("expected %#v, got %#v", expected, out)
-			} else {
-				msg := []byte(fmt.Sprintf(pongTemplate, i))
-
-				_, err := c2.Write(msg)
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
+			msg := []byte(fmt.Sprintf(pongTemplate, i))
+			_, err = c2.Write(msg)
+			assert.NoError(t, err)
 		}
 	}()
 

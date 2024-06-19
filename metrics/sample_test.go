@@ -1,11 +1,14 @@
 package metrics
 
 import (
+	"math"
 	"math/rand"
 	"runtime"
 	"testing"
 	"time"
 )
+
+const epsilonPercentile = .00000000001
 
 // Benchmark{Compute,Copy}{1000,1000000} demonstrate that, even for relatively
 // expensive computations like Variance, the cost of copying the Sample, as
@@ -326,7 +329,7 @@ func testUniformSampleStatistics(t *testing.T, s Sample) {
 	if 7380.5 != ps[1] {
 		t.Errorf("75th percentile: 7380.5 != %v\n", ps[1])
 	}
-	if 9986.429999999998 != ps[2] {
+	if math.Abs(9986.429999999998-ps[2]) > epsilonPercentile {
 		t.Errorf("99th percentile: 9986.429999999998 != %v\n", ps[2])
 	}
 }
