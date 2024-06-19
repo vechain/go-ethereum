@@ -307,7 +307,7 @@ func doTest(cmdline []string) {
 	packages = build.ExpandPackagesNoVendor(packages)
 
 	// Run analysis tools before the tests.
-	// build.MustRun(goTool("vet", packages...))
+	build.MustRun(goTool("vet", packages...))
 
 	// Run the actual tests.
 	gotest := goTool("test", buildFlags(env)...)
@@ -319,6 +319,7 @@ func doTest(cmdline []string) {
 	}
 
 	gotest.Args = append(gotest.Args, packages...)
+	gotest.Args = append(gotest.Args, "-count=1")
 	build.MustRun(gotest)
 }
 
