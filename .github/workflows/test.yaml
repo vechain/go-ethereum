@@ -30,4 +30,4 @@ jobs:
 
       - name: Make Test
         id: unit-test
-        run: make test
+        run: go test ./...
