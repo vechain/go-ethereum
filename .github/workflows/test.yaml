@@ -3,9 +3,6 @@ name: Unit Tests
 on:
   workflow_call:
 
-env:
-  GO111MODULE: off
-
 jobs:
   unit_tests:
     strategy:
@@ -31,6 +28,3 @@ jobs:
       - name: Make Test
         id: unit-test
         run: make test
-        env:
-          GOOS: linux
-          GOARCH: 386
