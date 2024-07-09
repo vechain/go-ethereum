@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - master
+      - thor-upstream
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
