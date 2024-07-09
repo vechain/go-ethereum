@@ -30,4 +30,7 @@ jobs:
 
       - name: Make Test
         id: unit-test
-        run: go test ./...
+        run: make test
+        env:
+          GOOS: linux
+          GOARCH: 386
