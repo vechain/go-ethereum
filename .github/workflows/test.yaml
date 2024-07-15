@@ -1,0 +1,30 @@
+name: Unit Tests
+
+on:
+  workflow_call:
+
+jobs:
+  unit_tests:
+    strategy:
+      matrix:
+        go-version: [ 1.10.x ]
+        os: [ ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Go version
+        run: go version
+
+      - name: Make all
+        run: make all
+
+      - name: Make Test
+        id: unit-test
+        run: make test

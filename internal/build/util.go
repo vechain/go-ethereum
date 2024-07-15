@@ -170,7 +170,9 @@ func ExpandPackagesNoVendor(patterns []string) []string {
 		var packages []string
 		for _, line := range strings.Split(string(out), "\n") {
 			if !strings.Contains(line, "/vendor/") {
-				packages = append(packages, strings.TrimSpace(line))
+				if strings.TrimSpace(line) != "github.com/ethereum/go-ethereum/mobile" {
+					packages = append(packages, strings.TrimSpace(line))
+				}
 			}
 		}
 		return packages
