@@ -159,6 +159,11 @@ func TestAndroid(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("cannot test Android bindings on Windows, skipping")
 	}
+
+	if ndk := os.Getenv("ANDROID_NDK"); ndk == "" {
+		t.Skip("ANDROID_NDK environment var not set, skipping")
+	}
+
 	// Make sure all the Android tools are installed
 	if _, err := exec.Command("which", "gradle").CombinedOutput(); err != nil {
 		t.Skip("command gradle not found, skipping")
@@ -173,7 +178,7 @@ func TestAndroid(t *testing.T) {
 	}
 	if _, err := exec.Command("which", "gomobile").CombinedOutput(); err != nil {
 		t.Log("gomobile missing, installing it...")
-		if out, err := exec.Command("go", "get", "golang.org/x/mobile/cmd/gomobile").CombinedOutput(); err != nil {
+		if out, err := exec.Command("go", "install", "golang.org/x/mobile/cmd/gomobile@latest").CombinedOutput(); err != nil {
 			t.Fatalf("install failed: %v\n%s", err, string(out))
 		}
 		t.Log("initializing gomobile...")
