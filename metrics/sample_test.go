@@ -243,15 +243,16 @@ func TestUniformSampleIncludesTail(t *testing.T) {
 	}
 }
 
-// func TestUniformSampleSnapshot(t *testing.T) {
-// 	s := NewUniformSample(100)
-// 	for i := 1; i <= 10000; i++ {
-// 		s.Update(int64(i))
-// 	}
-// 	snapshot := s.Snapshot()
-// 	s.Update(1)
-// 	testUniformSampleStatistics(t, snapshot)
-// }
+func TestUniformSampleSnapshot(t *testing.T) {
+	rand.Seed(1)
+	s := NewUniformSample(100)
+	for i := 1; i <= 10000; i++ {
+		s.Update(int64(i))
+	}
+	snapshot := s.Snapshot()
+	s.Update(1)
+	testUniformSampleStatistics(t, snapshot)
+}
 
 func TestUniformSampleStatistics(t *testing.T) {
 	rand.Seed(1)
