@@ -163,16 +163,14 @@ func ExpandPackagesNoVendor(patterns []string) []string {
 	}
 	if expand {
 		cmd := GoTool("list", patterns...)
-		out, err := cmd.CombinedOutput()
+		out, err := cmd.Output()
 		if err != nil {
 			log.Fatalf("package listing failed: %v\n%s", err, string(out))
 		}
 		var packages []string
 		for _, line := range strings.Split(string(out), "\n") {
 			if !strings.Contains(line, "/vendor/") {
-				if strings.TrimSpace(line) != "github.com/ethereum/go-ethereum/mobile" {
-					packages = append(packages, strings.TrimSpace(line))
-				}
+				packages = append(packages, strings.TrimSpace(line))
 			}
 		}
 		return packages

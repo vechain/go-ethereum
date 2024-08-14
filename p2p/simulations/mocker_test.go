@@ -109,7 +109,7 @@ func TestMocker(t *testing.T) {
 				}
 			case <-time.After(30 * time.Second):
 				wg.Done()
-				t.Fatalf("Timeout waiting for nodes being started up!")
+				t.Errorf("Timeout waiting for nodes being started up!")
 			}
 		}
 	}()
