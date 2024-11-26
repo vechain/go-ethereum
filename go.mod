@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/Azure/azure-storage-blob-go v0.0.0-20180712005634-eaae161d9d5e
 	github.com/aristanetworks/goarista v0.0.0-20170210015632-ea17b1a17847
-	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/cespare/cp v0.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea
@@ -33,7 +33,7 @@ require (
 	github.com/rjeczalik/notify v0.9.1-0.20180808203925-4e54e7fd043e
 	github.com/robertkrimen/otto v0.1.0
 	github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.0
 	github.com/syndtr/goleveldb v0.0.0-20180708030551-c4c61651e9e3
 	golang.org/x/crypto v0.22.0
 	golang.org/x/net v0.24.0
@@ -50,6 +50,7 @@ require (
 require (
 	github.com/Azure/azure-pipeline-go v0.0.0-20180607212504-7571e8eb0876 // indirect
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
