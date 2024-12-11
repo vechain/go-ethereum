@@ -37,6 +37,9 @@ type typeinfo struct {
 type tags struct {
 	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool
+	// rlp:"optional" allows for a field to be missing in the input list.
+	// If this is set, all subsequent fields must also be optional.
+	optional bool
 	// rlp:"tail" controls whether this field swallows additional list
 	// elements. It can only be set for the last field, which must be
 	// of slice type.
@@ -91,11 +94,14 @@ func cachedTypeInfo1(typ reflect.Type, tags tags) (*typeinfo, error) {
 }
 
 type field struct {
-	index int
-	info  *typeinfo
+	index    int
+	info     *typeinfo
+	optional bool
 }
 
 func structFields(typ reflect.Type) (fields []field, err error) {
+	anyOptional := false
+
 	for i := 0; i < typ.NumField(); i++ {
 		if f := typ.Field(i); f.PkgPath == "" { // exported
 			tags, err := parseStructTag(typ, i)
@@ -105,14 +111,30 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 			if tags.ignored {
 				continue
 			}
+			// If any field has the "optional" tag, subsequent fields must also have it.
+			if tags.optional || tags.tail {
+				anyOptional = true
+			} else if anyOptional {
+				return nil, fmt.Errorf(`rlp: struct field %v.%s needs "optional" tag`, typ, f.Name)
+			}
 			info, err := cachedTypeInfo1(f.Type, tags)
 			if err != nil {
 				return nil, err
 			}
-			fields = append(fields, field{i, info})
+			fields = append(fields, field{i, info, tags.optional})
 		}
 	}
 	return fields, nil
+}
+
+// anyOptionalFields returns the index of the first field with "optional" tag.
+func firstOptionalField(fields []field) int {
+	for i, f := range fields {
+		if f.optional {
+			return i
+		}
+	}
+	return len(fields)
 }
 
 func parseStructTag(typ reflect.Type, fi int) (tags, error) {
@@ -125,10 +147,18 @@ func parseStructTag(typ reflect.Type, fi int) (tags, error) {
 			ts.ignored = true
 		case "nil":
 			ts.nilOK = true
+		case "optional":
+			ts.optional = true
+			if ts.tail {
+				return ts, fmt.Errorf(`rlp: invalid struct tag "optional" for %v.%s (cannot be used with "tail")`, typ, f.Name)
+			}
 		case "tail":
 			ts.tail = true
 			if fi != typ.NumField()-1 {
 				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (must be on last field)`, typ, f.Name)
+			}
+			if ts.optional {
+				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%v (cannot be used with "optional")`, typ, f.Name)
 			}
 			if f.Type.Kind() != reflect.Slice {
 				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (field type is not slice)`, typ, f.Name)

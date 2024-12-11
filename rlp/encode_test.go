@@ -218,7 +218,7 @@ var encTests = []encTest{
 	{val: &tailRaw{A: 1, Tail: []RawValue{unhex("02")}}, output: "C20102"},
 	{val: &tailRaw{A: 1, Tail: []RawValue{}}, output: "C101"},
 	{val: &tailRaw{A: 1, Tail: nil}, output: "C101"},
-	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
+	{val: &ignoredField{A: 1, B: 2, C: 3}, output: "C20103"},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},
@@ -231,6 +231,20 @@ var encTests = []encTest{
 	{val: (*[]interface{})(nil), output: "C0"},
 	{val: (*[]struct{ uint })(nil), output: "C0"},
 	{val: (*interface{})(nil), output: "C0"},
+
+	// struct tag "optional"
+	{val: &optionalFields{}, output: "C180"},
+	{val: &optionalFields{A: 1}, output: "C101"},
+	{val: &optionalFields{A: 1, B: 2}, output: "C20102"},
+	{val: &optionalFields{A: 1, B: 2, C: 3}, output: "C3010203"},
+	{val: &optionalFields{A: 1, B: 0, C: 3}, output: "C3018003"},
+	{val: &optionalAndTailField{A: 1}, output: "C101"},
+	{val: &optionalAndTailField{A: 1, B: 2}, output: "C20102"},
+	{val: &optionalAndTailField{A: 1, Tail: []uint{5, 6}}, output: "C401800506"},
+	{val: &optionalAndTailField{A: 1, Tail: []uint{5, 6}}, output: "C401800506"},
+	{val: &optionalBigIntField{A: 1}, output: "C101"},
+	{val: &optionalPtrField{A: 1}, output: "C101"},
+	{val: &optionalPtrFieldNil{A: 1}, output: "C101"},
 
 	// interfaces
 	{val: []io.Reader{reader}, output: "C3C20102"}, // the contained value is a struct
