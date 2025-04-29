@@ -817,3 +817,19 @@ func unhex(str string) []byte {
 	}
 	return b
 }
+
+func TestDecodeCustomHex(t *testing.T) {
+	input := unhex("f8472788000f29b067ec403b81b4d8d7946068cff2fdee7744d69ffb11e87810ab63fcf83e0180828ca0881d904cac5922323f94bb63eadca65a2a76f09e029e79e30761012b6e7180")
+
+	var result []interface{}
+	err := Decode(bytes.NewReader(input), &result)
+	if err != nil {
+		t.Fatalf("Decode error: %v", err)
+	}
+
+	if len(result) == 0 {
+		t.Error("Decoded result is empty")
+	}
+
+	t.Logf("Decoded result: %#v", result)
+}
