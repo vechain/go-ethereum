@@ -821,15 +821,30 @@ func unhex(str string) []byte {
 func TestDecodeCustomHex(t *testing.T) {
 	input := unhex("f8472788000f29b067ec403b81b4d8d7946068cff2fdee7744d69ffb11e87810ab63fcf83e0180828ca0881d904cac5922323f94bb63eadca65a2a76f09e029e79e30761012b6e7180")
 
+	expected := []interface{}{
+		[]uint8{0x27},
+		[]uint8{0x0, 0xf, 0x29, 0xb0, 0x67, 0xec, 0x40, 0x3b},
+		[]uint8{0xb4},
+		[]interface{}{
+			[]interface{}{
+				[]uint8{0x60, 0x68, 0xcf, 0xf2, 0xfd, 0xee, 0x77, 0x44, 0xd6, 0x9f, 0xfb, 0x11, 0xe8, 0x78, 0x10, 0xab, 0x63, 0xfc, 0xf8, 0x3e},
+				[]uint8{0x1},
+				[]uint8{},
+			},
+		},
+		[]uint8{0x8c, 0xa0},
+		[]uint8{0x1d, 0x90, 0x4c, 0xac, 0x59, 0x22, 0x32, 0x3f},
+		[]uint8{0xbb, 0x63, 0xea, 0xdc, 0xa6, 0x5a, 0x2a, 0x76, 0xf0, 0x9e, 0x2, 0x9e, 0x79, 0xe3, 0x7, 0x61, 0x1, 0x2b, 0x6e, 0x71},
+		[]uint8{},
+	}
+
 	var result []interface{}
 	err := Decode(bytes.NewReader(input), &result)
 	if err != nil {
 		t.Fatalf("Decode error: %v", err)
 	}
 
-	if len(result) == 0 {
-		t.Error("Decoded result is empty")
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Decoded result does not match expected value\ngot:  %#v\nwant: %#v", result, expected)
 	}
-
-	t.Logf("Decoded result: %#v", result)
 }
