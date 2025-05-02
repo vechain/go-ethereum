@@ -839,12 +839,93 @@ func TestDecodeCustomHex(t *testing.T) {
 	}
 
 	var result []interface{}
-	err := Decode(bytes.NewReader(input), &result)
+	err := DecodeBytes(input, &result)
 	if err != nil {
 		t.Fatalf("Decode error: %v", err)
 	}
 
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("Decoded result does not match expected value\ngot:  %#v\nwant: %#v", result, expected)
+	}
+}
+
+type unsignedTransaction struct {
+	ChainTag   byte
+	BlockRef   uint64
+	Expiration []byte
+	Clauses    [][]interface{}
+	Gas        []byte
+	Nonce      []byte
+	Origin     []byte
+	Delegator  []byte
+}
+
+func TestDecodeCustomHex2(t *testing.T) {
+	input := unhex("f8494a8800d88b4ab127a39e81b4dad99416277a1ff38678291c41d1820957c78bb5da59ce82271080826270883b7628959fb8362194c05c334533c673582616ac2bf404b6c55efa108780")
+
+	var tx unsignedTransaction
+	err := DecodeBytes(input, &tx)
+	if err != nil {
+		t.Fatalf("Decode error: %v", err)
+	}
+
+	// Verificar ChainTag
+	if tx.ChainTag != 0x4a {
+		t.Errorf("ChainTag mismatch: got %x, want %x", tx.ChainTag, 0x4a)
+	}
+
+	// Verificar BlockRef
+	expectedBlockRef := uint64(0x00d88b4ab127a39e)
+	if tx.BlockRef != expectedBlockRef {
+		t.Errorf("BlockRef mismatch: got %x, want %x", tx.BlockRef, expectedBlockRef)
+	}
+
+	// Verificar Expiration
+	expectedExpiration := []byte{0x81, 0xb4}
+	if !bytes.Equal(tx.Expiration, expectedExpiration) {
+		t.Errorf("Expiration mismatch: got %x, want %x", tx.Expiration, expectedExpiration)
+	}
+
+	// Verificar Clauses
+	if len(tx.Clauses) != 1 {
+		t.Errorf("Clauses length mismatch: got %d, want %d", len(tx.Clauses), 1)
+	}
+
+	expectedTo := []byte{0x94, 0x16, 0x27, 0x7a, 0x1f, 0xf3, 0x86, 0x78, 0x29, 0x1c, 0x41, 0xd1, 0x82, 0x09, 0x57, 0xc7, 0x8b, 0xb5, 0xda, 0x59}
+	if !bytes.Equal(tx.Clauses[0][0].([]byte), expectedTo) {
+		t.Errorf("Clause To mismatch: got %x, want %x", tx.Clauses[0][0].([]byte), expectedTo)
+	}
+
+	expectedValue := []byte{0xce, 0x82, 0x27, 0x10}
+	if !bytes.Equal(tx.Clauses[0][1].([]byte), expectedValue) {
+		t.Errorf("Clause Value mismatch: got %x, want %x", tx.Clauses[0][1].([]byte), expectedValue)
+	}
+
+	expectedData := []byte{0x80, 0x82, 0x62, 0x70, 0x88, 0x3b, 0x76, 0x28, 0x95, 0x9f, 0xb8, 0x36, 0x21, 0x9c, 0x05, 0xc3, 0x34, 0x53, 0x3c, 0x67, 0x35, 0x82, 0x61, 0x6a, 0xc2, 0xbf, 0x40, 0x4b, 0x6c, 0x55, 0xef, 0xa1, 0x08, 0x78, 0x0}
+	if !bytes.Equal(tx.Clauses[0][2].([]byte), expectedData) {
+		t.Errorf("Clause Data mismatch: got %x, want %x", tx.Clauses[0][2].([]byte), expectedData)
+	}
+
+	// Verificar Gas
+	expectedGas := []byte{0x8c, 0xa0}
+	if !bytes.Equal(tx.Gas, expectedGas) {
+		t.Errorf("Gas mismatch: got %x, want %x", tx.Gas, expectedGas)
+	}
+
+	// Verificar Nonce
+	expectedNonce := []byte{0x1d, 0x90, 0x4c, 0xac, 0x59, 0x22, 0x32, 0x3f}
+	if !bytes.Equal(tx.Nonce, expectedNonce) {
+		t.Errorf("Nonce mismatch: got %x, want %x", tx.Nonce, expectedNonce)
+	}
+
+	// Verificar Origin
+	expectedOrigin := []byte{0xbb, 0x63, 0xea, 0xdc, 0xa6, 0x5a, 0x2a, 0x76, 0xf0, 0x9e, 0x2, 0x9e, 0x79, 0xe3, 0x7, 0x61, 0x1, 0x2b, 0x6e, 0x71}
+	if !bytes.Equal(tx.Origin, expectedOrigin) {
+		t.Errorf("Origin mismatch: got %x, want %x", tx.Origin, expectedOrigin)
+	}
+
+	// Verificar Delegator
+	if len(tx.Delegator) != 0 {
+		t.Errorf("Delegator should be empty, got %x", tx.Delegator)
 	}
 }
