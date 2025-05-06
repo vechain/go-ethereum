@@ -875,29 +875,24 @@ func TestDecodeCustomHex2(t *testing.T) {
 		t.Fatalf("Decode error: %v", err)
 	}
 
-	// Verificar ChainTag
 	if tx.ChainTag != 0x4a {
 		t.Errorf("ChainTag mismatch: got %x, want %x", tx.ChainTag, 0x4a)
 	}
 
-	// Verificar BlockRef
 	expectedBlockRefWithoutPadding := uint64(0xd88b4ab127a39e)
 	if tx.BlockRef != expectedBlockRefWithoutPadding {
 		t.Errorf("BlockRef mismatch: got %x, want %x", tx.BlockRef, expectedBlockRefWithoutPadding)
 	}
 
-	// Verificar Expiration
 	expectedExpiration := uint32(0xb4)
 	if tx.Expiration != expectedExpiration {
 		t.Errorf("Expiration mismatch: got %x, want %x", tx.Expiration, expectedExpiration)
 	}
 
-	// Verificar Clauses
 	if len(tx.Clauses) != 1 {
 		t.Errorf("Clauses length mismatch: got %d, want %d", len(tx.Clauses), 1)
 	}
 
-	// Verificar contenido de la cláusula
 	expectedClause := Clause{
 		Value: []byte{0x27, 0x10},
 		To:    []byte{0x16, 0x27, 0x7a, 0x1f, 0xf3, 0x86, 0x78, 0x29, 0x1c, 0x41, 0xd1, 0x82, 0x09, 0x57, 0xc7, 0x8b, 0xb5, 0xda, 0x59, 0xce},
@@ -913,25 +908,21 @@ func TestDecodeCustomHex2(t *testing.T) {
 		t.Errorf("Clause Data mismatch: got %x, want %x", tx.Clauses[0].Data, expectedClause.Data)
 	}
 
-	// Verificar Gas
 	expectedGas := uint64(25200)
 	if tx.Gas != expectedGas {
 		t.Errorf("Gas mismatch: got %x, want %x", tx.Gas, expectedGas)
 	}
 
-	// Verificar Nonce
 	expectedNonce := uint64(0xf590771933ad5aba)
 	if tx.Nonce != expectedNonce {
 		t.Errorf("Nonce mismatch: got %x, want %x", tx.Nonce, expectedNonce)
 	}
 
-	// Verificar Origin
 	expectedOrigin, _ := hex.DecodeString("c05c334533c673582616ac2bf404b6c55efa1087")
 	if !bytes.Equal(tx.Origin, expectedOrigin) {
 		t.Errorf("Origin mismatch: got %x, want %x", tx.Origin, expectedOrigin)
 	}
 
-	// Verificar Delegator (debe estar vacío)
 	if len(tx.Delegator) != 0 {
 		t.Errorf("Delegator should be empty, got %x", tx.Delegator)
 	}
