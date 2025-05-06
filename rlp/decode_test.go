@@ -875,7 +875,7 @@ func TestDecodeCustomHex2(t *testing.T) {
 		t.Fatalf("Decode error: %v", err)
 	}
 
-	if tx.ChainTag != 0x4a {
+	if tx.ChainTag != byte(74) {
 		t.Errorf("ChainTag mismatch: got %x, want %x", tx.ChainTag, 0x4a)
 	}
 
@@ -884,7 +884,7 @@ func TestDecodeCustomHex2(t *testing.T) {
 		t.Errorf("BlockRef mismatch: got %x, want %x", tx.BlockRef, expectedBlockRefWithoutPadding)
 	}
 
-	expectedExpiration := uint32(0xb4)
+	expectedExpiration := uint32(180)
 	if tx.Expiration != expectedExpiration {
 		t.Errorf("Expiration mismatch: got %x, want %x", tx.Expiration, expectedExpiration)
 	}
