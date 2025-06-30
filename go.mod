@@ -1,6 +1,8 @@
 module github.com/ethereum/go-ethereum
 
-go 1.22
+go 1.23.0
+
+toolchain go1.23.10
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.0.0-20180712005634-eaae161d9d5e
@@ -35,11 +37,11 @@ require (
 	github.com/rs/cors v0.0.0-20160617231935-a62a804a8a00
 	github.com/stretchr/testify v1.8.0
 	github.com/syndtr/goleveldb v0.0.0-20180708030551-c4c61651e9e3
-	golang.org/x/crypto v0.22.0
-	golang.org/x/net v0.24.0
-	golang.org/x/sync v0.7.0
-	golang.org/x/sys v0.19.0
-	golang.org/x/tools v0.20.0
+	golang.org/x/crypto v0.35.0
+	golang.org/x/net v0.25.0
+	golang.org/x/sync v0.11.0
+	golang.org/x/sys v0.30.0
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 	gopkg.in/check.v1 v1.0.0-20161208181325-20d25e280405
 	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
@@ -52,7 +54,6 @@ require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/maruel/panicparse v0.0.0-20160720141634-ad661195ed0e // indirect
 	github.com/maruel/ut v1.0.2 // indirect
@@ -67,8 +68,8 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rs/xhandler v0.0.0-20160618193221-ed27b6fd6521 // indirect
 	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/term v0.19.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
