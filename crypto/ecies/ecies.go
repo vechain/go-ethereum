@@ -124,6 +124,9 @@ func (prv *PrivateKey) GenerateShared(pub *PublicKey, skLen, macLen int) (sk []b
 	if prv.PublicKey.Curve != pub.Curve {
 		return nil, ErrInvalidCurve
 	}
+	if pub.X == nil || pub.Y == nil || !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+		return nil, ErrInvalidPublicKey
+	}
 	if skLen+macLen > MaxSharedKeyLength(pub) {
 		return nil, ErrSharedKeyTooBig
 	}
@@ -306,6 +309,9 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 	if curve, ok := R.Curve.(crypto.EllipticCurve); ok {
 		R.X, R.Y = curve.Unmarshal(c[:rLen])
 		if R.X == nil {
+			return nil, ErrInvalidPublicKey
+		}
+		if !R.Curve.IsOnCurve(R.X, R.Y) {
 			return nil, ErrInvalidPublicKey
 		}
 

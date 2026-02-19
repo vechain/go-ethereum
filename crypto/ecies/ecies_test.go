@@ -412,6 +412,45 @@ func TestSharedKeyStatic(t *testing.T) {
 	}
 }
 
+// TestInvalidCurve verifies that off-curve public keys are rejected early
+// in both GenerateShared and Decrypt, preventing invalid curves
+// (go-ethereum#33669).
+func TestInvalidCurve(t *testing.T) {
+	prv, err := GenerateKey(rand.Reader, crypto.S256(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Construct an off-curve public key: secp256k1 generator X but Y+1.
+	// This point does not satisfy the curve equation y² = x³ + 7 (mod p).
+	offCurvePub := &PublicKey{
+		Curve: crypto.S256(),
+		X:     new(big.Int).Set(crypto.S256().Params().Gx),
+		Y:     new(big.Int).Add(crypto.S256().Params().Gy, big.NewInt(1)),
+	}
+
+	// GenerateShared must reject the off-curve point before performing ECDH.
+	skLen := MaxSharedKeyLength(&prv.PublicKey) / 2
+	_, err = prv.GenerateShared(offCurvePub, skLen, skLen)
+	if err != ErrInvalidPublicKey {
+		t.Fatalf("GenerateShared: expected ErrInvalidPublicKey, got %v", err)
+	}
+
+	// Decrypt must reject a ciphertext whose embedded ephemeral key is off-curve.
+	// Format: [0x04 | X (32B) | Y (32B) | 1B ciphertext | 32B MAC] = 98 bytes.
+	ct := make([]byte, 98)
+	ct[0] = 4 // uncompressed point prefix
+	offCurvePub.X.FillBytes(ct[1:33])
+	offCurvePub.Y.FillBytes(ct[33:65])
+	// ct[65] = 0x00 (dummy ciphertext byte)
+	// ct[66:98] = zeros  (dummy MAC, never reached)
+
+	_, err = prv.Decrypt(ct, nil, nil)
+	if err != ErrInvalidPublicKey {
+		t.Fatalf("Decrypt: expected ErrInvalidPublicKey, got %v", err)
+	}
+}
+
 func hexKey(prv string) *PrivateKey {
 	key, err := crypto.HexToECDSA(prv)
 	if err != nil {
