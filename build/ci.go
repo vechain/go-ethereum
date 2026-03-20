@@ -258,6 +258,8 @@ func buildFlags(env build.Environment) (flags []string) {
 		ld = append(ld, "-s")
 	}
 
+	ld = append(ld, "-checklinkname=0")
+
 	if len(ld) > 0 {
 		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
