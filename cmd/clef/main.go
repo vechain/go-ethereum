@@ -555,7 +555,7 @@ func checkFile(filename string) error {
 
 // confirm displays a text and asks for user confirmation
 func confirm(text string) bool {
-	fmt.Printf(text)
+	fmt.Print(text)
 	fmt.Printf("\nEnter 'ok' to proceed:\n>")
 
 	text, err := bufio.NewReader(os.Stdin).ReadString('\n')

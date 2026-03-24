@@ -19,7 +19,6 @@ package ethash
 import (
 	"bytes"
 	"encoding/binary"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"reflect"
@@ -698,7 +697,7 @@ func TestHashimoto(t *testing.T) {
 // Tests that caches generated on disk may be done concurrently.
 func TestConcurrentDiskCacheGeneration(t *testing.T) {
 	// Create a temp folder to generate the caches into
-	cachedir, err := ioutil.TempDir("", "")
+	cachedir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("Failed to create temporary cache dir: %v", err)
 	}
