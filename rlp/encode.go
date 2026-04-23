@@ -17,9 +17,11 @@
 package rlp
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
+	"math/bits"
 	"reflect"
 	"sync"
 )
@@ -30,6 +32,8 @@ var (
 	EmptyString = []byte{0x80}
 	EmptyList   = []byte{0xC0}
 )
+
+var ErrNegativeBigInt = errors.New("rlp: cannot encode negative big.Int")
 
 // Encoder is implemented by types that require custom
 // encoding rules or want to encode private fields.
@@ -113,6 +117,7 @@ func EncodeToReader(val interface{}) (size int, r io.Reader, err error) {
 	eb := encbufPool.Get().(*encbuf)
 	eb.reset()
 	if err := eb.encode(val); err != nil {
+		encbufPool.Put(eb)
 		return 0, nil, err
 	}
 	return eb.size(), &encReader{buf: eb}, nil
@@ -206,6 +211,49 @@ func (w *encbuf) encodeString(b []byte) {
 		w.encodeStringHeader(len(b))
 		w.str = append(w.str, b...)
 	}
+}
+
+func (w *encbuf) writeBool(b bool) {
+	if b {
+		w.str = append(w.str, 0x01)
+	} else {
+		w.str = append(w.str, 0x80)
+	}
+}
+
+func (w *encbuf) writeUint64(i uint64) {
+	if i == 0 {
+		w.str = append(w.str, 0x80)
+	} else if i < 128 {
+		w.str = append(w.str, byte(i))
+	} else {
+		s := putint(w.sizebuf[1:], i)
+		w.sizebuf[0] = 0x80 + byte(s)
+		w.str = append(w.str, w.sizebuf[:s+1]...)
+	}
+}
+
+func (w *encbuf) writeBytes(b []byte) {
+	if len(b) == 1 && b[0] <= 0x7F {
+		w.str = append(w.str, b[0])
+	} else {
+		w.encodeStringHeader(len(b))
+		w.str = append(w.str, b...)
+	}
+}
+
+func (w *encbuf) writeString(s string) {
+	w.writeBytes([]byte(s))
+}
+
+func (w *encbuf) writeBigInt(i *big.Int) {
+	bitlen := i.BitLen()
+	if bitlen <= 64 {
+		w.writeUint64(i.Uint64())
+		return
+	}
+	// Integer is larger than 64 bits, encode from i.Bytes().
+	w.encodeString(i.Bytes())
 }
 
 func (w *encbuf) list() *listhead {
@@ -336,10 +384,7 @@ func (r *encReader) next() []byte {
 	}
 }
 
-var (
-	encoderInterface = reflect.TypeOf(new(Encoder)).Elem()
-	big0             = big.NewInt(0)
-)
+var encoderInterface = reflect.TypeOf(new(Encoder)).Elem()
 
 // makeWriter creates a writer function for the given type.
 func makeWriter(typ reflect.Type, ts tags) (writer, error) {
@@ -366,7 +411,7 @@ func makeWriter(typ reflect.Type, ts tags) (writer, error) {
 	case kind == reflect.Slice && isByte(typ.Elem()):
 		return writeBytes, nil
 	case kind == reflect.Array && isByte(typ.Elem()):
-		return writeByteArray, nil
+		return makeByteArrayWriter(typ), nil
 	case kind == reflect.Slice || kind == reflect.Array:
 		return makeSliceWriter(typ, ts)
 	case kind == reflect.Struct:
@@ -427,9 +472,9 @@ func writeBigIntNoPtr(val reflect.Value, w *encbuf) error {
 }
 
 func writeBigInt(i *big.Int, w *encbuf) error {
-	if cmp := i.Cmp(big0); cmp == -1 {
-		return fmt.Errorf("rlp: cannot encode negative *big.Int")
-	} else if cmp == 0 {
+	if i.Sign() == -1 {
+		return ErrNegativeBigInt
+	} else if i.Sign() == 0 {
 		w.str = append(w.str, 0x80)
 	} else {
 		w.encodeString(i.Bytes())
@@ -439,6 +484,32 @@ func writeBigInt(i *big.Int, w *encbuf) error {
 
 func writeBytes(val reflect.Value, w *encbuf) error {
 	w.encodeString(val.Bytes())
+	return nil
+}
+
+func makeByteArrayWriter(typ reflect.Type) writer {
+	switch typ.Len() {
+	case 0:
+		return writeLengthZeroByteArray
+	case 1:
+		return writeLengthOneByteArray
+	default:
+		return writeByteArray
+	}
+}
+
+func writeLengthZeroByteArray(val reflect.Value, w *encbuf) error {
+	w.str = append(w.str, 0x80)
+	return nil
+}
+
+func writeLengthOneByteArray(val reflect.Value, w *encbuf) error {
+	b := byte(val.Index(0).Uint())
+	if b <= 0x7f {
+		w.str = append(w.str, b)
+	} else {
+		w.str = append(w.str, 0x81, b)
+	}
 	return nil
 }
 
@@ -640,10 +711,9 @@ func putint(b []byte, i uint64) (size int) {
 }
 
 // intsize computes the minimum number of bytes required to store i.
-func intsize(i uint64) (size int) {
-	for size = 1; ; size++ {
-		if i >>= 8; i == 0 {
-			return size
-		}
+func intsize(i uint64) int {
+	if i == 0 {
+		return 1
 	}
+	return (bits.Len64(i) + 7) / 8
 }
