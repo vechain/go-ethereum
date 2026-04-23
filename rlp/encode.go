@@ -600,10 +600,20 @@ func makeStructWriter(typ reflect.Type) (writer, error) {
 	if err != nil {
 		return nil, err
 	}
+	firstOptIdx := firstOptionalField(fields)
+
 	writer := func(val reflect.Value, w *encbuf) error {
 		lh := w.list()
-		for _, f := range fields {
-			if err := f.info.writer(val.Field(f.index), w); err != nil {
+		// Find the last non-zero optional field. Trailing optional fields
+		// with zero values are omitted from the encoding.
+		lastField := len(fields) - 1
+		for ; lastField >= firstOptIdx; lastField-- {
+			if !val.Field(fields[lastField].index).IsZero() {
+				break
+			}
+		}
+		for i := 0; i <= lastField; i++ {
+			if err := fields[i].info.writer(val.Field(fields[i].index), w); err != nil {
 				return err
 			}
 		}

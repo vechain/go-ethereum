@@ -226,7 +226,7 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 		return makeStructDecoder(typ)
 	case kind == reflect.Ptr:
 		if tags.nilOK {
-			return makeOptionalPtrDecoder(typ)
+			return makeOptionalPtrDecoder(typ, tags)
 		}
 		return makePtrDecoder(typ)
 	case kind == reflect.Interface:
@@ -442,9 +442,14 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		if _, err := s.List(); err != nil {
 			return wrapStreamError(err, typ)
 		}
-		for _, f := range fields {
+		for i, f := range fields {
 			err := f.info.decoder(s, val.Field(f.index))
 			if err == EOL {
+				if f.optional {
+					// Zero out this field and all remaining optional fields.
+					zeroFields(val, fields[i:])
+					break
+				}
 				return &decodeError{msg: "too few elements", typ: typ}
 			} else if err != nil {
 				return addErrorContext(err, "."+typ.Field(f.index).Name)
@@ -453,6 +458,13 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		return wrapStreamError(s.ListEnd(), typ)
 	}
 	return dec, nil
+}
+
+func zeroFields(structval reflect.Value, fields []field) {
+	for _, f := range fields {
+		fv := structval.Field(f.index)
+		fv.Set(reflect.Zero(fv.Type()))
+	}
 }
 
 // makePtrDecoder creates a decoder that decodes into
@@ -481,7 +493,7 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 // just like makePtrDecoder does.
 //
 // This decoder is used for pointer-typed struct fields with struct tag "nil".
-func makeOptionalPtrDecoder(typ reflect.Type) (decoder, error) {
+func makeOptionalPtrDecoder(typ reflect.Type, ts tags) (decoder, error) {
 	etype := typ.Elem()
 	etypeinfo, err := cachedTypeInfo1(etype, tags{})
 	if err != nil {
@@ -489,7 +501,7 @@ func makeOptionalPtrDecoder(typ reflect.Type) (decoder, error) {
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
 		kind, size, err := s.Kind()
-		if err != nil || size == 0 && kind != Byte {
+		if err != nil || isNilValue(kind, size, ts) {
 			// rearm s.Kind. This is important because the input
 			// position must advance to the next value even though
 			// we don't read anything.
@@ -508,6 +520,22 @@ func makeOptionalPtrDecoder(typ reflect.Type) (decoder, error) {
 		return err
 	}
 	return dec, nil
+}
+
+// isNilValue checks whether the given kind and size represent a nil value
+// according to the tag's nilKind setting.
+func isNilValue(kind Kind, size uint64, ts tags) bool {
+	if size != 0 || kind == Byte {
+		return false
+	}
+	switch ts.nilKind {
+	case nilKindString:
+		return kind == String
+	case nilKindList:
+		return kind == List
+	default: // nilKindDefault
+		return true // any empty value (size==0, not Byte) is nil
+	}
 }
 
 var ifsliceType = reflect.TypeOf([]interface{}{})

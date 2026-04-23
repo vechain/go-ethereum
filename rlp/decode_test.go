@@ -360,6 +360,37 @@ type hasIgnoredField struct {
 	C uint
 }
 
+type optionalFields struct {
+	A uint
+	B uint `rlp:"optional"`
+	C uint `rlp:"optional"`
+}
+
+type optionalFieldsPtr struct {
+	A uint
+	B *uint `rlp:"optional"`
+}
+
+type optionalFieldsNilPtr struct {
+	A uint
+	B *uint `rlp:"optional,nil"`
+}
+
+type optionalAndTailFields struct {
+	A uint
+	B uint   `rlp:"optional"`
+	C []uint `rlp:"tail"`
+}
+
+type invalidOptionalNonLast struct {
+	A uint `rlp:"optional"`
+	B uint
+}
+
+type invalidOptionalAndTail struct {
+	A []uint `rlp:"optional,tail"`
+}
+
 var decodeTests = []decodeTest{
 	// booleans
 	{input: "01", ptr: new(bool), value: true},
@@ -516,6 +547,56 @@ var decodeTests = []decodeTest{
 		input: "C20102",
 		ptr:   new(hasIgnoredField),
 		value: hasIgnoredField{A: 1, C: 2},
+	},
+
+	// struct tag "optional"
+	{
+		input: "C3010203",
+		ptr:   new(optionalFields),
+		value: optionalFields{A: 1, B: 2, C: 3},
+	},
+	{
+		input: "C20102",
+		ptr:   new(optionalFields),
+		value: optionalFields{A: 1, B: 2, C: 0},
+	},
+	{
+		input: "C101",
+		ptr:   new(optionalFields),
+		value: optionalFields{A: 1, B: 0, C: 0},
+	},
+	{
+		// A is required, so empty list is an error
+		input: "C0",
+		ptr:   new(optionalFields),
+		error: "rlp: too few elements for rlp.optionalFields",
+	},
+	// optional + tail combined in struct
+	{
+		input: "C401020304",
+		ptr:   new(optionalAndTailFields),
+		value: optionalAndTailFields{A: 1, B: 2, C: []uint{3, 4}},
+	},
+	{
+		input: "C20102",
+		ptr:   new(optionalAndTailFields),
+		value: optionalAndTailFields{A: 1, B: 2, C: []uint{}},
+	},
+	{
+		input: "C101",
+		ptr:   new(optionalAndTailFields),
+		value: optionalAndTailFields{A: 1, B: 0, C: nil},
+	},
+	// invalid optional tag combinations
+	{
+		input: "C0",
+		ptr:   new(invalidOptionalNonLast),
+		error: `rlp: struct field rlp.invalidOptionalNonLast.B needs "optional" tag (follows optional fields)`,
+	},
+	{
+		input: "C0",
+		ptr:   new(invalidOptionalAndTail),
+		error: `rlp: invalid struct tags: "optional" and "tail" cannot be combined for rlp.invalidOptionalAndTail.A`,
 	},
 
 	// RawValue

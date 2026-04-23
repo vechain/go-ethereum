@@ -33,14 +33,27 @@ type typeinfo struct {
 	writer
 }
 
+type nilKind uint8
+
+const (
+	nilKindDefault nilKind = iota
+	nilKindString          // rlp:"nilString" — encode nil as empty string (0x80)
+	nilKindList            // rlp:"nilList" — encode nil as empty list (0xC0)
+)
+
 // represents struct tags
 type tags struct {
 	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool
+	// nilKind controls how nil pointers are encoded/decoded.
+	nilKind nilKind
 	// rlp:"tail" controls whether this field swallows additional list
 	// elements. It can only be set for the last field, which must be
 	// of slice type.
 	tail bool
+	// rlp:"optional" controls whether this field can be absent from the
+	// input list. Optional fields must be at the end of the struct.
+	optional bool
 	// rlp:"-" ignores fields.
 	ignored bool
 }
@@ -91,11 +104,13 @@ func cachedTypeInfo1(typ reflect.Type, tags tags) (*typeinfo, error) {
 }
 
 type field struct {
-	index int
-	info  *typeinfo
+	index    int
+	info     *typeinfo
+	optional bool
 }
 
 func structFields(typ reflect.Type) (fields []field, err error) {
+	haveOptional := false
 	for i := 0; i < typ.NumField(); i++ {
 		if f := typ.Field(i); f.PkgPath == "" { // exported
 			tags, err := parseStructTag(typ, i)
@@ -105,14 +120,34 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 			if tags.ignored {
 				continue
 			}
+			// Once an optional or tail field appears, all subsequent
+			// exported fields must also be optional or tail.
+			isOptional := tags.optional || tags.tail
+			if haveOptional && !isOptional {
+				return nil, fmt.Errorf(`rlp: struct field %v.%s needs "optional" tag (follows optional fields)`, typ, f.Name)
+			}
+			if isOptional {
+				haveOptional = true
+			}
 			info, err := cachedTypeInfo1(f.Type, tags)
 			if err != nil {
 				return nil, err
 			}
-			fields = append(fields, field{i, info})
+			fields = append(fields, field{index: i, info: info, optional: isOptional})
 		}
 	}
 	return fields, nil
+}
+
+// firstOptionalField returns the index of the first optional field in the
+// field list, or len(fields) if there are no optional fields.
+func firstOptionalField(fields []field) int {
+	for i, f := range fields {
+		if f.optional {
+			return i
+		}
+	}
+	return len(fields)
 }
 
 func parseStructTag(typ reflect.Type, fi int) (tags, error) {
@@ -125,6 +160,14 @@ func parseStructTag(typ reflect.Type, fi int) (tags, error) {
 			ts.ignored = true
 		case "nil":
 			ts.nilOK = true
+		case "nilString":
+			ts.nilOK = true
+			ts.nilKind = nilKindString
+		case "nilList":
+			ts.nilOK = true
+			ts.nilKind = nilKindList
+		case "optional":
+			ts.optional = true
 		case "tail":
 			ts.tail = true
 			if fi != typ.NumField()-1 {
@@ -136,6 +179,9 @@ func parseStructTag(typ reflect.Type, fi int) (tags, error) {
 		default:
 			return ts, fmt.Errorf("rlp: unknown struct tag %q on %v.%s", t, typ, f.Name)
 		}
+	}
+	if ts.tail && ts.optional {
+		return ts, fmt.Errorf(`rlp: invalid struct tags: "optional" and "tail" cannot be combined for %v.%s`, typ, f.Name)
 	}
 	return ts, nil
 }

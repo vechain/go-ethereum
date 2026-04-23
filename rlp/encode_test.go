@@ -220,6 +220,16 @@ var encTests = []encTest{
 	{val: &tailRaw{A: 1, Tail: nil}, output: "C101"},
 	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
 
+	// struct tag "optional" — trailing zero optional fields are omitted
+	{val: optionalFields{A: 1, B: 2, C: 3}, output: "C3010203"},
+	{val: optionalFields{A: 1, B: 2, C: 0}, output: "C20102"},
+	{val: optionalFields{A: 1, B: 0, C: 0}, output: "C101"},
+	{val: optionalFields{A: 0, B: 0, C: 0}, output: "C180"},
+	// optional + tail in struct
+	{val: optionalAndTailFields{A: 1, B: 2, C: []uint{3, 4}}, output: "C401020304"},
+	{val: optionalAndTailFields{A: 1, B: 2, C: nil}, output: "C20102"},
+	{val: optionalAndTailFields{A: 1, B: 0, C: nil}, output: "C101"},
+
 	// nil
 	{val: (*uint)(nil), output: "80"},
 	{val: (*string)(nil), output: "80"},
