@@ -27,6 +27,9 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -49,6 +52,7 @@ var (
 	errUintOverflow  = errors.New("rlp: uint overflow")
 	errNoPointer     = errors.New("rlp: interface given to Decode must be a pointer")
 	errDecodeIntoNil = errors.New("rlp: pointer given to Decode must not be nil")
+	errUint256Large  = errors.New("rlp: value too large for uint256")
 )
 
 var streamPool = sync.Pool{
@@ -197,23 +201,28 @@ func addErrorContext(err error, ctx string) error {
 }
 
 var (
-	decoderInterface = reflect.TypeOf(new(Decoder)).Elem()
-	bigInt           = reflect.TypeOf(big.Int{})
+	decoderInterface = reflect.TypeFor[Decoder]()
+	bigInt           = reflect.TypeFor[big.Int]()
+	u256Int          = reflect.TypeFor[uint256.Int]()
 )
 
-func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
+func makeDecoder(typ reflect.Type, tags rlpstruct.Tags) (dec decoder, err error) {
 	kind := typ.Kind()
 	switch {
 	case typ == rawValueType:
 		return decodeRawValue, nil
-	case typ.Implements(decoderInterface):
-		return decodeDecoder, nil
-	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(decoderInterface):
-		return decodeDecoderNoPtr, nil
-	case typ.AssignableTo(reflect.PtrTo(bigInt)):
+	case typ.AssignableTo(reflect.PointerTo(bigInt)):
 		return decodeBigInt, nil
 	case typ.AssignableTo(bigInt):
 		return decodeBigIntNoPtr, nil
+	case typ == reflect.PointerTo(u256Int):
+		return decodeU256, nil
+	case typ == u256Int:
+		return decodeU256NoPtr, nil
+	case kind == reflect.Ptr:
+		return makePtrDecoder(typ, tags)
+	case reflect.PointerTo(typ).Implements(decoderInterface):
+		return decodeDecoder, nil
 	case isUint(kind):
 		return decodeUint, nil
 	case kind == reflect.Bool:
@@ -224,11 +233,6 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 		return makeListDecoder(typ, tags)
 	case kind == reflect.Struct:
 		return makeStructDecoder(typ)
-	case kind == reflect.Ptr:
-		if tags.nilOK {
-			return makeOptionalPtrDecoder(typ, tags)
-		}
-		return makePtrDecoder(typ)
 	case kind == reflect.Interface:
 		return decodeInterface, nil
 	default:
@@ -290,17 +294,34 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
+func decodeU256NoPtr(s *Stream, val reflect.Value) error {
+	return decodeU256(s, val.Addr())
+}
+
+func decodeU256(s *Stream, val reflect.Value) error {
+	i := val.Interface().(*uint256.Int)
+	if i == nil {
+		i = new(uint256.Int)
+		val.Set(reflect.ValueOf(i))
+	}
+	err := s.ReadUint256(i)
+	if err != nil {
+		return wrapStreamError(err, val.Type())
+	}
+	return nil
+}
+
+func makeListDecoder(typ reflect.Type, tag rlpstruct.Tags) (decoder, error) {
 	etype := typ.Elem()
-	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
+	if etype.Kind() == reflect.Uint8 && !reflect.PointerTo(etype).Implements(decoderInterface) {
 		if typ.Kind() == reflect.Array {
 			return decodeByteArray, nil
 		}
 		return decodeByteSlice, nil
 	}
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := theTC.infoWhileGenerating(etype, rlpstruct.Tags{})
+	if etypeinfo.decoderErr != nil {
+		return nil, etypeinfo.decoderErr
 	}
 	var dec decoder
 	switch {
@@ -308,7 +329,7 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListArray(s, val, etypeinfo.decoder)
 		}
-	case tag.tail:
+	case tag.Tail:
 		// A slice with "tail" tag can occur as the last field
 		// of a struct and is supposed to swallow all remaining
 		// list elements. The struct decoder already called s.List,
@@ -467,15 +488,21 @@ func zeroFields(structval reflect.Value, fields []field) {
 	}
 }
 
-// makePtrDecoder creates a decoder that decodes into
-// the pointer's element type.
-func makePtrDecoder(typ reflect.Type) (decoder, error) {
+func makePtrDecoder(typ reflect.Type, tag rlpstruct.Tags) (decoder, error) {
 	etype := typ.Elem()
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
+	etypeinfo := theTC.infoWhileGenerating(etype, rlpstruct.Tags{})
+	switch {
+	case etypeinfo.decoderErr != nil:
+		return nil, etypeinfo.decoderErr
+	case !tag.NilOK:
+		return makeSimplePtrDecoder(etype, etypeinfo), nil
+	default:
+		return makeNilPtrDecoder(etype, etypeinfo, tag), nil
 	}
-	dec := func(s *Stream, val reflect.Value) (err error) {
+}
+
+func makeSimplePtrDecoder(etype reflect.Type, etypeinfo *typeinfo) decoder {
+	return func(s *Stream, val reflect.Value) (err error) {
 		newval := val
 		if val.IsNil() {
 			newval = reflect.New(etype)
@@ -485,30 +512,35 @@ func makePtrDecoder(typ reflect.Type) (decoder, error) {
 		}
 		return err
 	}
-	return dec, nil
 }
 
-// makeOptionalPtrDecoder creates a decoder that decodes empty values
+// makeNilPtrDecoder creates a decoder that decodes empty values
 // as nil. Non-empty values are decoded into a value of the element type,
-// just like makePtrDecoder does.
+// just like makeSimplePtrDecoder does.
 //
 // This decoder is used for pointer-typed struct fields with struct tag "nil".
-func makeOptionalPtrDecoder(typ reflect.Type, ts tags) (decoder, error) {
-	etype := typ.Elem()
-	etypeinfo, err := cachedTypeInfo1(etype, tags{})
-	if err != nil {
-		return nil, err
-	}
-	dec := func(s *Stream, val reflect.Value) (err error) {
+func makeNilPtrDecoder(etype reflect.Type, etypeinfo *typeinfo, ts rlpstruct.Tags) decoder {
+	typ := reflect.PointerTo(etype)
+	nilPtr := reflect.Zero(typ)
+	nilKind := typeNilKind(etype, ts)
+
+	return func(s *Stream, val reflect.Value) (err error) {
 		kind, size, err := s.Kind()
-		if err != nil || isNilValue(kind, size, ts) {
-			// rearm s.Kind. This is important because the input
-			// position must advance to the next value even though
-			// we don't read anything.
+		if err != nil {
+			val.Set(nilPtr)
+			return wrapStreamError(err, typ)
+		}
+		// Handle empty values as nil pointer.
+		if kind != Byte && size == 0 {
+			if kind != nilKind {
+				return &decodeError{
+					msg: fmt.Sprintf("wrong kind of empty value (got %v, want %v)", kind, nilKind),
+					typ: typ,
+				}
+			}
 			s.kind = -1
-			// set the pointer to nil.
-			val.Set(reflect.Zero(typ))
-			return err
+			val.Set(nilPtr)
+			return nil
 		}
 		newval := val
 		if val.IsNil() {
@@ -519,26 +551,9 @@ func makeOptionalPtrDecoder(typ reflect.Type, ts tags) (decoder, error) {
 		}
 		return err
 	}
-	return dec, nil
 }
 
-// isNilValue checks whether the given kind and size represent a nil value
-// according to the tag's nilKind setting.
-func isNilValue(kind Kind, size uint64, ts tags) bool {
-	if size != 0 || kind == Byte {
-		return false
-	}
-	switch ts.nilKind {
-	case nilKindString:
-		return kind == String
-	case nilKindList:
-		return kind == List
-	default: // nilKindDefault
-		return true // any empty value (size==0, not Byte) is nil
-	}
-}
-
-var ifsliceType = reflect.TypeOf([]interface{}{})
+var ifsliceType = reflect.TypeFor[[]any]()
 
 func decodeInterface(s *Stream, val reflect.Value) error {
 	if val.Type().NumMethod() != 0 {
@@ -564,25 +579,12 @@ func decodeInterface(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-// This decoder is used for non-pointer values of types
-// that implement the Decoder interface using a pointer receiver.
-func decodeDecoderNoPtr(s *Stream, val reflect.Value) error {
+func decodeDecoder(s *Stream, val reflect.Value) error {
 	return val.Addr().Interface().(Decoder).DecodeRLP(s)
 }
 
-func decodeDecoder(s *Stream, val reflect.Value) error {
-	// Decoder instances are not handled using the pointer rule if the type
-	// implements Decoder with pointer receiver (i.e. always)
-	// because it might handle empty values specially.
-	// We need to allocate one here in this case, like makePtrDecoder does.
-	if val.Kind() == reflect.Ptr && val.IsNil() {
-		val.Set(reflect.New(val.Type().Elem()))
-	}
-	return val.Interface().(Decoder).DecodeRLP(s)
-}
-
 // Kind represents the kind of value contained in an RLP stream.
-type Kind int
+type Kind int8
 
 const (
 	Byte Kind = iota
@@ -632,14 +634,12 @@ type Stream struct {
 	// auxiliary buffer for integer decoding
 	uintbuf [32]byte
 
-	kind    Kind   // kind of value ahead
-	size    uint64 // size of value ahead
-	byteval byte   // value of single byte in type tag
-	kinderr error  // error from last readKind
-	stack   []listpos
+	size    uint64   // size of value ahead
+	kinderr error    // error from last readKind
+	stack   []uint64 // list sizes
+	kind    Kind     // kind of value ahead
+	byteval byte     // value of single byte in type tag
 }
-
-type listpos struct{ pos, size uint64 }
 
 // NewStream creates a new decoding stream reading from r.
 //
@@ -854,7 +854,12 @@ func (s *Stream) List() (size uint64, err error) {
 	if kind != List {
 		return 0, ErrExpectedList
 	}
-	s.stack = append(s.stack, listpos{0, size})
+
+	// Remove the list size from the parent limit.
+	if inList, limit := s.listLimit(); inList {
+		s.stack[len(s.stack)-1] = limit - size
+	}
+	s.stack = append(s.stack, size)
 	s.kind = -1
 	s.size = 0
 	return size, nil
@@ -863,17 +868,12 @@ func (s *Stream) List() (size uint64, err error) {
 // ListEnd returns to the enclosing list.
 // The input reader must be positioned at the end of a list.
 func (s *Stream) ListEnd() error {
-	if len(s.stack) == 0 {
+	if inList, listLimit := s.listLimit(); !inList {
 		return errNotInList
-	}
-	tos := s.stack[len(s.stack)-1]
-	if tos.pos != tos.size {
+	} else if listLimit > 0 {
 		return errNotAtEOL
 	}
 	s.stack = s.stack[:len(s.stack)-1] // pop
-	if len(s.stack) > 0 {
-		s.stack[len(s.stack)-1].pos += tos.size
-	}
 	s.kind = -1
 	s.size = 0
 	return nil
@@ -882,11 +882,8 @@ func (s *Stream) ListEnd() error {
 // MoreDataInList reports whether the current list context contains
 // more data to be read.
 func (s *Stream) MoreDataInList() bool {
-	if len(s.stack) == 0 {
-		return false
-	}
-	tos := s.stack[len(s.stack)-1]
-	return tos.pos < tos.size
+	_, limit := s.listLimit()
+	return limit > 0
 }
 
 // BigInt decodes an RLP string and returns its contents as a big.Int.
@@ -939,6 +936,45 @@ func (s *Stream) decodeBigInt(dst *big.Int) error {
 	return nil
 }
 
+// ReadUint256 decodes the next value as a uint256.
+func (s *Stream) ReadUint256(dst *uint256.Int) error {
+	var buffer []byte
+	kind, size, err := s.Kind()
+	switch {
+	case err != nil:
+		return err
+	case kind == List:
+		return ErrExpectedString
+	case kind == Byte:
+		buffer = s.uintbuf[:1]
+		buffer[0] = s.byteval
+		s.kind = -1 // re-arm Kind
+	case size == 0:
+		// Avoid zero-length read.
+		s.kind = -1
+	case size <= uint64(len(s.uintbuf)):
+		// All possible uint256 values fit into s.uintbuf.
+		buffer = s.uintbuf[:size]
+		if err := s.readFull(buffer); err != nil {
+			return err
+		}
+		// Reject inputs where single byte encoding should have been used.
+		if size == 1 && buffer[0] < 128 {
+			return ErrCanonSize
+		}
+	default:
+		return errUint256Large
+	}
+
+	// Reject leading zero bytes.
+	if len(buffer) > 0 && buffer[0] == 0 {
+		return ErrCanonInt
+	}
+	// Set the integer bytes.
+	dst.SetBytes(buffer)
+	return nil
+}
+
 // Decode decodes a value and stores the result in the value pointed
 // to by val. Please see the documentation for the Decode function
 // to learn about the decoding rules.
@@ -954,12 +990,12 @@ func (s *Stream) Decode(val interface{}) error {
 	if rval.IsNil() {
 		return errDecodeIntoNil
 	}
-	info, err := cachedTypeInfo(rtyp.Elem(), tags{})
+	decoder, err := cachedDecoder(rtyp.Elem())
 	if err != nil {
 		return err
 	}
 
-	err = info.decoder(s, rval.Elem())
+	err = decoder(s, rval.Elem())
 	if decErr, ok := err.(*decodeError); ok && len(decErr.ctx) > 0 {
 		// add decode target type to error so context has more meaning
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))
@@ -1021,35 +1057,31 @@ func (s *Stream) Reset(r io.Reader, inputLimit uint64) {
 // the value. Subsequent calls to Kind (until the value is decoded)
 // will not advance the input reader and return cached information.
 func (s *Stream) Kind() (kind Kind, size uint64, err error) {
-	var tos *listpos
-	if len(s.stack) > 0 {
-		tos = &s.stack[len(s.stack)-1]
+	if s.kind >= 0 {
+		return s.kind, s.size, s.kinderr
 	}
-	if s.kind < 0 {
-		s.kinderr = nil
-		// Don't read further if we're at the end of the
-		// innermost list.
-		if tos != nil && tos.pos == tos.size {
-			return 0, 0, EOL
-		}
-		s.kind, s.size, s.kinderr = s.readKind()
-		if s.kinderr == nil {
-			if tos == nil {
-				// At toplevel, check that the value is smaller
-				// than the remaining input length.
-				if s.limited && s.size > s.remaining {
-					s.kinderr = ErrValueTooLarge
-				}
-			} else {
-				// Inside a list, check that the value doesn't overflow the list.
-				if s.size > tos.size-tos.pos {
-					s.kinderr = ErrElemTooLarge
-				}
+
+	s.kinderr = nil
+	// Don't read further if we're at the end of the innermost list.
+	inList, listLimit := s.listLimit()
+	if inList && listLimit == 0 {
+		return 0, 0, EOL
+	}
+	s.kind, s.size, s.kinderr = s.readKind()
+	if s.kinderr == nil {
+		if inList {
+			// Inside a list, check that the value doesn't overflow the list.
+			if s.size > listLimit {
+				s.kinderr = ErrElemTooLarge
+			}
+		} else {
+			// At toplevel, check that the value is smaller
+			// than the remaining input length.
+			if s.limited && s.size > s.remaining {
+				s.kinderr = ErrValueTooLarge
 			}
 		}
 	}
-	// Note: this might return a sticky error generated
-	// by an earlier call to readKind.
 	return s.kind, s.size, s.kinderr
 }
 
@@ -1173,13 +1205,11 @@ func (s *Stream) readByte() (byte, error) {
 func (s *Stream) willRead(n uint64) error {
 	s.kind = -1 // rearm Kind
 
-	if len(s.stack) > 0 {
-		// check list overflow
-		tos := s.stack[len(s.stack)-1]
-		if n > tos.size-tos.pos {
+	if inList, limit := s.listLimit(); inList {
+		if n > limit {
 			return ErrElemTooLarge
 		}
-		s.stack[len(s.stack)-1].pos += n
+		s.stack[len(s.stack)-1] = limit - n
 	}
 	if s.limited {
 		if n > s.remaining {
@@ -1188,6 +1218,13 @@ func (s *Stream) willRead(n uint64) error {
 		s.remaining -= n
 	}
 	return nil
+}
+
+func (s *Stream) listLimit() (inList bool, limit uint64) {
+	if len(s.stack) == 0 {
+		return false, 0
+	}
+	return true, s.stack[len(s.stack)-1]
 }
 
 // sliceReader is a helper for DecodeBytes that avoids allocating a bytes.Reader.

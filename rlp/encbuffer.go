@@ -19,15 +19,17 @@ package rlp
 import (
 	"io"
 	"math/big"
+
+	"github.com/holiman/uint256"
 )
 
-func encBufferFromWriter(w io.Writer) *encbuf {
+func encBufferFromWriter(w io.Writer) *encBuffer {
 	switch w := w.(type) {
 	case EncoderBuffer:
 		return w.buf
 	case *EncoderBuffer:
 		return w.buf
-	case *encbuf:
+	case *encBuffer:
 		return w
 	default:
 		return nil
@@ -39,7 +41,7 @@ func encBufferFromWriter(w io.Writer) *encbuf {
 // The zero value is NOT ready for use. To get a usable buffer,
 // create it using NewEncoderBuffer or call Reset.
 type EncoderBuffer struct {
-	buf *encbuf
+	buf *encBuffer
 	dst io.Writer
 
 	ownBuffer bool
@@ -58,7 +60,7 @@ func (w *EncoderBuffer) Reset(dst io.Writer) {
 		panic("can't Reset derived EncoderBuffer")
 	}
 
-	// If the destination writer has an *encbuf, use it.
+	// If the destination writer has an *encBuffer, use it.
 	// Note that w.ownBuffer is left false here.
 	if dst != nil {
 		if outer := encBufferFromWriter(dst); outer != nil {
@@ -69,7 +71,7 @@ func (w *EncoderBuffer) Reset(dst io.Writer) {
 
 	// Get a fresh buffer.
 	if w.buf == nil {
-		w.buf = encbufPool.Get().(*encbuf)
+		w.buf = encBufferPool.Get().(*encBuffer)
 		w.ownBuffer = true
 	}
 	w.buf.reset()
@@ -81,11 +83,11 @@ func (w *EncoderBuffer) Reset(dst io.Writer) {
 func (w *EncoderBuffer) Flush() error {
 	var err error
 	if w.dst != nil {
-		err = w.buf.toWriter(w.dst)
+		err = w.buf.writeTo(w.dst)
 	}
 	// Release the internal buffer.
 	if w.ownBuffer {
-		encbufPool.Put(w.buf)
+		encBufferPool.Put(w.buf)
 	}
 	*w = EncoderBuffer{}
 	return err
@@ -93,12 +95,12 @@ func (w *EncoderBuffer) Flush() error {
 
 // ToBytes returns the encoded bytes.
 func (w *EncoderBuffer) ToBytes() []byte {
-	return w.buf.toBytes()
+	return w.buf.makeBytes()
 }
 
 // AppendToBytes appends the encoded bytes to dst.
 func (w *EncoderBuffer) AppendToBytes(dst []byte) []byte {
-	out := w.buf.toBytes()
+	out := w.buf.makeBytes()
 	return append(dst, out...)
 }
 
@@ -133,6 +135,11 @@ func (w EncoderBuffer) WriteBigInt(i *big.Int) {
 	w.buf.writeBigInt(i)
 }
 
+// WriteUint256 encodes uint256.Int as an RLP string.
+func (w EncoderBuffer) WriteUint256(i *uint256.Int) {
+	w.buf.writeUint256(i)
+}
+
 // WriteBytes encodes b as an RLP string.
 func (w EncoderBuffer) WriteBytes(b []byte) {
 	w.buf.writeBytes(b)
@@ -146,13 +153,10 @@ func (w EncoderBuffer) WriteString(s string) {
 // List starts a list. It returns an internal index. Call ListEnd with
 // this index after encoding the content to finish the list.
 func (w EncoderBuffer) List() int {
-	// The vechain encbuf.list() returns *listhead, but we need to
-	// return an int index. Call list() and return the index.
-	w.buf.list()
-	return len(w.buf.lheads) - 1
+	return w.buf.list()
 }
 
 // ListEnd finishes the given list.
 func (w EncoderBuffer) ListEnd(index int) {
-	w.buf.listEnd(w.buf.lheads[index])
+	w.buf.listEnd(index)
 }

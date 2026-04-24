@@ -591,12 +591,12 @@ var decodeTests = []decodeTest{
 	{
 		input: "C0",
 		ptr:   new(invalidOptionalNonLast),
-		error: `rlp: struct field rlp.invalidOptionalNonLast.B needs "optional" tag (follows optional fields)`,
+		error: `rlp: invalid struct tag "" for rlp.invalidOptionalNonLast.B (must be optional because preceding field "A" is optional)`,
 	},
 	{
 		input: "C0",
 		ptr:   new(invalidOptionalAndTail),
-		error: `rlp: invalid struct tags: "optional" and "tail" cannot be combined for rlp.invalidOptionalAndTail.A`,
+		error: `rlp: invalid struct tag "tail" for rlp.invalidOptionalAndTail.A (also has "optional" tag)`,
 	},
 
 	// RawValue
