@@ -415,7 +415,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 		if uint64(vlen) > size {
 			return &decodeError{msg: "input string too short", typ: val.Type()}
 		}
-		slice := val.Slice(0, vlen).Interface().([]byte)
+		slice := val.Bytes()
 		if err := s.readFull(slice); err != nil {
 			return err
 		}
